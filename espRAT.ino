@@ -127,7 +127,6 @@ bool b_isConnectedToWifi = true;
 bool b_isConnectedToBT = true;
 bool b_isCharging = true;
 int i_batteryPercent = 100;
-char c_currentTime[6] = "12:34";
 
 /*
  ********
@@ -135,25 +134,9 @@ char c_currentTime[6] = "12:34";
  ********
 */
 
-const char* c_menuItems[] = { "WIFI", "BLUETOOTH", "BADUSB", "GAMES", "SETTINGS", "TURN OFF" };
+const char* c_menuItems[] = { "WIFI", "BLUETOOTH", "SUB 1GHZ", "BADUSB", "GAMES", "SETTINGS", "TURN OFF" };
 const int i_menuSize = sizeof(c_menuItems) / sizeof(c_menuItems[0]);
 int i_currentSelection = 0;
-const unsigned char PROGMEM logo_evilusb[]{
-  0x0e, 0x00, 0x31, 0x80, 0x40, 0x40, 0x40, 0x40, 0x9b, 0x20, 0xbb, 0xa0, 0x80, 0x20, 0x84, 0x20,
-  0x60, 0xc0, 0x15, 0x00, 0x1f, 0x00
-};
-const unsigned char PROGMEM logo_settings[]{
-  0x44, 0x40, 0x44, 0x40, 0x4a, 0x40, 0x44, 0x40, 0x44, 0x40, 0xa4, 0x40, 0x44, 0x40, 0x44, 0x40,
-  0x44, 0xa0, 0x44, 0x40, 0x44, 0x40
-};
-const unsigned char PROGMEM logo_turnoff[]{
-  0x04, 0x00, 0x04, 0x00, 0x35, 0x80, 0x24, 0x80, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x20, 0x80,
-  0x31, 0x80, 0x0e, 0x00, 0x00, 0x00
-};
-const unsigned char PROGMEM logo_games[]{
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x80, 0x11, 0x00, 0x3f, 0x80, 0x6e, 0xc0, 0xff, 0xe0, 
-	0xbf, 0xa0, 0xa0, 0xa0, 0x1b, 0x00
-};
 
 /*
  ********
@@ -161,7 +144,7 @@ const unsigned char PROGMEM logo_games[]{
  ********
 */
 
-const char* c_wifiItems[] = { "WIFITEST", "WIFITEST", "WIFITEST" };
+const char* c_wifiItems[] = { "DEAUTH" };
 const int i_wifiSize = sizeof(c_wifiItems) / sizeof(c_wifiItems[0]);
 
 /*
@@ -170,8 +153,17 @@ const int i_wifiSize = sizeof(c_wifiItems) / sizeof(c_wifiItems[0]);
  *************
 */
 
-const char* c_btItems[] = { "BLUETOOTHTEST", "BLUETOOTHTEST", "BLUETOOTHTEST" };
+const char* c_btItems[] = {  };
 const int i_btSize = sizeof(c_btItems) / sizeof(c_btItems[0]);
+
+/*
+ ************
+ * SUB 1GHZ *
+ ************
+*/
+
+const char* c_subItems[] = {  };
+const int i_subSize = sizeof(c_subItems) / sizeof(c_subItems[0]);
 
 /*
  **********
@@ -181,6 +173,10 @@ const int i_btSize = sizeof(c_btItems) / sizeof(c_btItems[0]);
 
 const char* c_badusbItems[] = { "BADUSBTEST", "BADUSBTEST", "BADUSBTEST" };
 const int i_badusbSize = sizeof(c_badusbItems) / sizeof(c_badusbItems[0]);
+const unsigned char PROGMEM logo_evilusb[]{
+  0x0e, 0x00, 0x31, 0x80, 0x40, 0x40, 0x40, 0x40, 0x9b, 0x20, 0xbb, 0xa0, 0x80, 0x20, 0x84, 0x20,
+  0x60, 0xc0, 0x15, 0x00, 0x1f, 0x00
+};
 
 /*
  *********
@@ -190,6 +186,10 @@ const int i_badusbSize = sizeof(c_badusbItems) / sizeof(c_badusbItems[0]);
 
 const char* c_gamesItems[] = { "GAMESTEST", "GAMESTEST", "GAMESTEST" };
 const int i_gamesSize = sizeof(c_gamesItems) / sizeof(c_gamesItems[0]);
+const unsigned char PROGMEM logo_games[]{
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x20, 0x80, 0x11, 0x00, 0x3f, 0x80, 0x6e, 0xc0, 0xff, 0xe0, 
+	0xbf, 0xa0, 0xa0, 0xa0, 0x1b, 0x00
+};
 
 /*
  ************
@@ -199,6 +199,10 @@ const int i_gamesSize = sizeof(c_gamesItems) / sizeof(c_gamesItems[0]);
 
 const char* c_settingsItems[] = { "SETTINGSTEST", "SETTINGSTEST", "SETTINGSTEST" };
 const int i_settingsSize = sizeof(c_settingsItems) / sizeof(c_settingsItems[0]);
+const unsigned char PROGMEM logo_settings[]{
+  0x44, 0x40, 0x44, 0x40, 0x4a, 0x40, 0x44, 0x40, 0x44, 0x40, 0xa4, 0x40, 0x44, 0x40, 0x44, 0x40,
+  0x44, 0xa0, 0x44, 0x40, 0x44, 0x40
+};
 
 /*
  ***********
@@ -212,6 +216,17 @@ ezButton btn_ok(27);
 ezButton btn_back(14);
 
 /*
+ ************
+ * SHUTDOWN *
+ ************
+*/
+
+const unsigned char PROGMEM logo_turnoff[]{
+  0x04, 0x00, 0x04, 0x00, 0x35, 0x80, 0x24, 0x80, 0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x20, 0x80,
+  0x31, 0x80, 0x0e, 0x00, 0x00, 0x00
+};
+
+/*
  *********
  * OTHER *
  *********
@@ -222,9 +237,11 @@ enum WhereAt {
   MENU,
   WIFI,
   BLUETOOTH,
+  SUB,
   BADUSB,
   GAMES,
-  SETTINGS
+  SETTINGS,
+  IDLE
 };
 enum WhereAt wh;
 
@@ -329,7 +346,9 @@ void loop() {
   }
   if (btn_ok.isReleased()) {
     if (wh == MENU) {
-      switch(i_currentSelection) {
+      int temp = i_currentSelection;
+      i_currentSelection = 0;
+      switch(temp) {
         case 0:
           wifiDisplay();
           wh = WIFI;
@@ -339,18 +358,22 @@ void loop() {
           wh = BLUETOOTH;
           break;
         case 2:
+          subDisplay();
+          wh = SUB;
+          break;
+        case 3:
           badusbDisplay();
           wh = BADUSB;
           break;
-        case 3:
+        case 4:
           gamesDisplay();
           wh = GAMES;
           break;
-        case 4:
+        case 5:
           settingsDisplay();
           wh = SETTINGS;
           break;
-        case 5:
+        case 6:
           shutoff();
           break;
         default:
@@ -358,15 +381,28 @@ void loop() {
           shutoff();
           break;
       }
+      return;
     }
-    i_currentSelection = 0;
+    if (wh == WIFI) {
+      int temp = i_currentSelection;
+      i_currentSelection = 0;
+      switch(temp) {
+        case 0:
+          DEAUTH();
+          break;
+        default:
+          break;
+      }
+      return;
+    }
   }
   if (btn_back.isReleased()) {
+    int temp = i_currentSelection;
+    i_currentSelection = 0;
     if (wh != MENU) {
       menuDisplay();
       wh = MENU;
     }
-    i_currentSelection = 0;
   }
 }
 
@@ -395,7 +431,7 @@ void helloDisplay() {
 void menuDisplay() {
   display.clearDisplay();
   // HUD
-  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, c_currentTime);
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
   // MENU LIST
   int j = 0;
   for (int i = i_currentSelection; i < i_menuSize; i++) {
@@ -420,7 +456,7 @@ void menuDisplay() {
   display.display();
 }
 
-void hudDisplay(bool wifi, bool bt, bool charging, int percent, char current[]) {
+void hudDisplay(bool wifi, bool bt, bool charging, int percent) {
   // STROKE
   display.drawLine(0, 15, 128, 15, WHITE);
   // WIFI
@@ -447,17 +483,12 @@ void hudDisplay(bool wifi, bool bt, bool charging, int percent, char current[]) 
   display.setTextColor(WHITE);
   display.setCursor(104, 4);
   display.printf("%d%%", percent);
-  // CURRENT TIME
-  display.setTextSize(1);
-  display.setTextColor(WHITE);
-  display.setCursor(50, 4);
-  display.print(current);
 }
 
 void wifiDisplay() {
   display.clearDisplay();
   // HUD
-  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, c_currentTime);
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
   // MENU LIST
   int j = 0;
   for (int i = i_currentSelection; i < i_wifiSize; i++) {
@@ -479,7 +510,7 @@ void wifiDisplay() {
 void btDisplay() {
   display.clearDisplay();
   // HUD
-  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, c_currentTime);
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
   // MENU LIST
   int j = 0;
   for (int i = i_currentSelection; i < i_btSize; i++) {
@@ -501,7 +532,7 @@ void btDisplay() {
 void badusbDisplay() {
   display.clearDisplay();
   // HUD
-  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, c_currentTime);
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
   // MENU LIST
   int j = 0;
   for (int i = i_currentSelection; i < i_badusbSize; i++) {
@@ -523,7 +554,7 @@ void badusbDisplay() {
 void gamesDisplay() {
   display.clearDisplay();
   // HUD
-  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, c_currentTime);
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
   // MENU LIST
   int j = 0;
   for (int i = i_currentSelection; i < i_gamesSize; i++) {
@@ -545,7 +576,7 @@ void gamesDisplay() {
 void settingsDisplay() {
   display.clearDisplay();
   // HUD
-  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, c_currentTime);
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
   // MENU LIST
   int j = 0;
   for (int i = i_currentSelection; i < i_settingsSize; i++) {
@@ -564,6 +595,42 @@ void settingsDisplay() {
   display.display();
 }
 
+void subDisplay() {
+  display.clearDisplay();
+  // HUD
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
+  // MENU LIST
+  int j = 0;
+  for (int i = i_currentSelection; i < i_subSize; i++) {
+    if (i == i_currentSelection) {
+      display.setTextColor(BLACK);
+      display.fillRoundRect(0, 20 * (j + 1) - 3, 110, 18, 3, WHITE);
+    } else {
+      display.setTextColor(WHITE);
+      display.drawRoundRect(0, 20 * (j + 1) - 3, 110, 18, 3, WHITE);
+    }
+    display.setTextSize(1);
+    display.setCursor(4, 20 * (j + 1) + 2);
+    display.printf("%d. %s", i + 1, c_subItems[i]);
+    j++;
+  }
+  display.display();
+}
+
 void shutoff() {
   // Something
+}
+
+/*
+ ********
+ * WIFI *
+ ********
+*/
+
+void DEAUTH() {
+  display.clearDisplay();
+  // HUD
+  hudDisplay(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent);
+  
+  display.display();
 }
