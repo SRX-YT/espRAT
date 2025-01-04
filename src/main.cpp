@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <SPI.h>
 #include <string>
 #include <vector>
 #include <Adafruit_GFX.h>
@@ -76,7 +77,7 @@ std::vector<MenuItem> v_menuItems;
 
 void splashScreen();
 void displayMenuItems();
-void displayHud(bool wifi, bool bt, bool charging, int percent, std::string title);
+void displayHud(int percent, const char* title, bool charging);
 
 /*
  *********
@@ -85,7 +86,7 @@ void displayHud(bool wifi, bool bt, bool charging, int percent, std::string titl
 */
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(115200);
 
     if(!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { 
         Serial.println(F("SSD1306 allocation failed"));
@@ -100,30 +101,24 @@ void setup() {
     p_where = WhereAt::MENU;
 
     MenuItem wifiMenu("WIFI");
-    wifiMenu.SetIcon(IMAGES::icon_wifi);
     v_menuItems.push_back(wifiMenu);
 
     MenuItem bluetoothMenu("BLUETOOTH");
-    bluetoothMenu.SetIcon(IMAGES::icon_bt);
     v_menuItems.push_back(bluetoothMenu);
 
     MenuItem subMenu("SUB 1GHZ");
     v_menuItems.push_back(subMenu);
 
     MenuItem badusbMenu("BADUSB");
-    badusbMenu.SetIcon(IMAGES::icon_evilusb);
     v_menuItems.push_back(badusbMenu);
 
     MenuItem gamesMenu("GAMES");
-    gamesMenu.SetIcon(IMAGES::icon_games);
     v_menuItems.push_back(gamesMenu);
 
     MenuItem settingsMenu("SETTINGS");
-    settingsMenu.SetIcon(IMAGES::icon_settings);
     v_menuItems.push_back(settingsMenu);
 
     MenuItem shutdownMenu("TURN OFF");
-    shutdownMenu.SetIcon(IMAGES::icon_turnoff);
     v_menuItems.push_back(shutdownMenu);
 
     splashScreen();
@@ -137,7 +132,21 @@ void setup() {
 */
 
 void loop() {
+    btn_up.loop();
+    btn_down.loop();
 
+    if (btn_up.isReleased()) {
+        if (i_currentSelection > 0) {
+            i_currentSelection -= 1;
+            displayMenuItems();
+        }
+    }
+    if (btn_down.isReleased()) {
+        if (i_currentSelection < v_menuItems.size() - 1) {
+            i_currentSelection += 1;
+            displayMenuItems();
+        }
+    }
 }
 
 void splashScreen() {
@@ -148,56 +157,55 @@ void splashScreen() {
     display.setCursor(10, 7);
     display.println("Be RAT, be silent.");
     display.display();
-    delay(3000);
+    delay(1000);
+    
 }
 
 void displayMenuItems() {
     display.clearDisplay();
-    displayHud(b_isConnectedToWifi, b_isConnectedToBT, b_isCharging, i_batteryPercent, "");
+    displayHud(i_batteryPercent, "MENU", b_isCharging);
     int j = 0;
     for (int i = i_currentSelection; i < v_menuItems.size(); i++) {
-        if (i == i_currentSelection) {
-            display.setTextColor(BLACK);
-            display.fillRoundRect(0, 20 * (j + 1) - 3, 110, 18, 3, WHITE);
-        } else {
-            display.setTextColor(WHITE);
-            display.drawRoundRect(0, 20 * (j + 1) - 3, 110, 18, 3, WHITE);
-        }
-        display.setTextSize(1);
-        display.setCursor(4, 20 * (j + 1) + 2);
-        display.printf("%d. %s", i + 1, v_menuItems[i].GetName());
-        //display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_wifi, 11, 11, WHITE);
-        j++;
+    if (i == i_currentSelection) {
+      display.setTextColor(BLACK);
+      display.fillRoundRect(0, 20 * (j + 1) - 3, 110, 18, 3, WHITE);
+    } else {
+      display.setTextColor(WHITE);
+      display.drawRoundRect(0, 20 * (j + 1) - 3, 110, 18, 3, WHITE);
     }
+    display.setTextSize(1);
+    display.setCursor(4, 20 * (j + 1) + 2);
+    display.print(v_menuItems[i].GetName());
+    if (v_menuItems[i].GetName() == "WIFI")      { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_wifi, 11, 11, WHITE); }
+    if (v_menuItems[i].GetName() == "BLUETOOTH") { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_bt, 11, 11, WHITE); }
+    if (v_menuItems[i].GetName() == "BADUSB")    { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_evilusb, 11, 11, WHITE); }
+    if (v_menuItems[i].GetName() == "SETTINGS")  { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_settings, 11, 11, WHITE); }
+    if (v_menuItems[i].GetName() == "TURN OFF")  { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_turnoff, 11, 11, WHITE); }
+    if (v_menuItems[i].GetName() == "GAMES")     { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_games, 11, 11, WHITE);}
+    j++;
+  }
     display.display();
 }
 
-void displayHud(bool wifi, bool bt, bool charging, int percent, std::string title) {
+void displayHud(int percent, const char* title, bool charging) {
     // STROKE
     display.drawLine(0, 15, 128, 15, WHITE);
-    // WIFI
-    if (wifi) {
-      display.drawBitmap(0, 1, IMAGES::icon_wifi, 11, 11, 1);
-    } else {
-      display.drawBitmap(0, 1, IMAGES::icon_nowifi, 11, 11, 1);
-    }
-    // BLUETOOTH
-    if (bt) {
-      display.drawBitmap(15, 1, IMAGES::icon_bt, 11, 11, 1);
-    } else {
-      display.drawBitmap(15, 1, IMAGES::icon_nobt, 11, 11, 1);
-    }
-    // TITLE
+    // TITLEf
+    display.setTextSize(1);
+    display.setTextColor(WHITE);
+    display.setCursor(20, 4);
+    display.print(title);
     // CHARGING
     if (charging) {
-      display.setTextSize(1);
-      display.setTextColor(WHITE);
-      display.setCursor(98, 4);
-      display.print("+");
+        display.setTextSize(1);
+        display.setTextColor(WHITE);
+        display.setCursor(78, 4);
+        display.print("+");
     }
     // PERCENT OF BATTERY
     display.setTextSize(1);
     display.setTextColor(WHITE);
-    display.setCursor(104, 4);
+    display.setCursor(84, 4);
     display.printf("%d%%", percent);
+    
 }
