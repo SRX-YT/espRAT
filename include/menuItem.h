@@ -18,6 +18,14 @@ public:
         return this->s_name;
     }
 
+    int GetSize() {
+        return this->i_size;
+    }
+
+    std::vector<String> GetItems() {
+        return this->v_listItems;
+    }
+
 private:
     int i_size;
     String s_name;
