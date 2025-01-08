@@ -13,9 +13,10 @@
 #include <Adafruit_SSD1306.h>
 #include <images.h>
 #include <menuItem.h>
+#include <ezButton.h>
 #include <RF24.h>
-#include <esp_bt.h>
-#include <esp_wifi.h>
+#include "esp_bt.h"
+#include "esp_wifi.h"
 
 /*
  **********
@@ -35,11 +36,12 @@
  *********************
 */
 
-bool b_isConnectedToWifi = true;
-bool b_isConnectedToBT   = true;
-bool b_isCharging        = true;
-int  i_batteryPercent    = 100;
-int  i_currentSelection  = 0;
+bool          b_isConnectedToWifi = true;
+bool          b_isConnectedToBT   = true;
+bool          b_isCharging        = true;
+int           i_batteryPercent    = 100;
+int           i_currentSelection  = 0;
+constexpr int SPI_SPEED           = 16000000;
 
 /*
  *********
@@ -61,6 +63,19 @@ enum WhereAt {
 std::vector<MenuItem> v_menuItems;
 
 /*
+ ***********
+ * BUTTONS *
+ ***********
+*/
+
+ezButton btn_up(14);
+ezButton btn_down(33);
+ezButton btn_left(32);
+ezButton btn_right(15);
+ezButton btn_ok(27);
+ezButton btn_home(12);
+
+/*
  *********
  * VOIDS *
  *********
@@ -75,11 +90,10 @@ void displaySub();
 void displayBad();
 void displayGames();
 void displaySettings();
-
-void configureRadio(RF24 &radio, int channel, SPIClass &spi);
-void jamBLE();
-void jamBluetooth();
 void jamAll();
+void jamBluetooth();
+void jamBLE();
+void configureRadio(RF24 &radio, int channel, SPIClass *spi);
 
 /*
  ************
@@ -101,12 +115,10 @@ MenuItem shutdownMenu("REBOOT");
  ********
 */
 
-constexpr int SPI_SPEED = 16000000;
-SPIClass spiVSPI;
-RF24 radioVSPI(16, 5, SPI_SPEED);
-int i_bluetoothChannels[] = {32, 34, 46, 48, 50, 52, 0, 1, 2, 4, 6, 8, 22, 24, 26, 28, 30, 74, 76, 78, 80};
-int i_ble_channels[] = {2, 26, 80};
-int i_currentMode = 0;
+SPIClass *spiVSPI = nullptr;
+RF24 radioVSPI(4, 5, SPI_SPEED);
+int bluetooth_channels[] = {32, 34, 46, 48, 50, 52, 0, 1, 2, 4, 6, 8, 22, 24, 26, 28, 30, 74, 76, 78, 80};
+int ble_channels[] = {2, 26, 80};
 
 /*
  *********
@@ -121,6 +133,22 @@ void setup() {
         Serial.println(F("SSD1306 allocation failed"));
         for(;;);
     }
+
+    esp_bt_controller_deinit();
+    esp_wifi_stop();
+    esp_wifi_deinit();
+    esp_wifi_disconnect();
+
+    spiVSPI = new SPIClass(VSPI);
+    spiVSPI->begin();
+    configureRadio(radioVSPI, ble_channels[0], spiVSPI);
+
+    btn_up.setDebounceTime(DEBOUNCE_TIME);
+    btn_down.setDebounceTime(DEBOUNCE_TIME);
+    btn_left.setDebounceTime(DEBOUNCE_TIME);
+    btn_right.setDebounceTime(DEBOUNCE_TIME);
+    btn_ok.setDebounceTime(DEBOUNCE_TIME);
+    btn_home.setDebounceTime(DEBOUNCE_TIME);
 
     p_where = WhereAt::MENU;
 
@@ -148,20 +176,6 @@ void setup() {
 
     splashScreen();
     displayMenuItems();
-
-    esp_bt_controller_deinit();
-    esp_wifi_stop();
-    esp_wifi_deinit();
-    esp_wifi_disconnect();
-
-    spiVSPI.begin(18, 19, 23, 5);
-    configureRadio(radioVSPI, i_ble_channels[0], spiVSPI);
-
-    if (!radioVSPI.begin()) {
-    Serial.println("Radio hardware is not responding!");
-    while (1);
-    }
-    Serial.println("nRF24L01 module initialized successfully.");
 }
 
 /*
@@ -171,117 +185,214 @@ void setup() {
 */
 
 void loop() {
-    if (Serial.available()) {
-        String command = Serial.readStringUntil('\n');
-        if (command == "W") {
-            if (i_currentSelection > 0) {
-                i_currentSelection -= 1;
-            } else {
-                i_currentSelection = v_menuItems.size() - 1;
+        jamBLE();
+        
+        btn_up.loop();
+        btn_down.loop();
+        btn_left.loop();
+        btn_right.loop();
+        btn_ok.loop();
+        btn_home.loop();
+
+        if (btn_up.isReleased()) {
+            int size;
+            switch(p_where) {
+                case WhereAt::MENU:
+                    size = v_menuItems.size();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displayMenuItems();
+                    break;
+                case WhereAt::WIFI:
+                    size = wifiMenu.GetSize();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displayWifi();
+                    break;
+                case WhereAt::BLUETOOTH:
+                    size = bluetoothMenu.GetSize();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displayBluetooth();
+                    break;
+                case WhereAt::SUB:
+                    size = subMenu.GetSize();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displaySub();
+                    break;
+                case WhereAt::BADUSB:
+                    size = badusbMenu.GetSize();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displayBad();
+                    break;
+                case WhereAt::GAMES:
+                    size = gamesMenu.GetSize();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displayGames();
+                    break;
+                case WhereAt::SETTINGS:
+                    size = settingsMenu.GetSize();
+                    if (i_currentSelection > 0) {
+                        i_currentSelection--;
+                    } else {
+                        i_currentSelection = size - 1;
+                    }
+                    displaySettings();
+                    break;
+                default:
+                    break;
             }
-            displayMenuItems();
+            Serial.println("UpPressed");
         }
-        if (command == "S") {
-            if (i_currentSelection < v_menuItems.size() - 1) {
-                i_currentSelection += 1;
-            } else {
+        if (btn_down.isReleased()) {
+            int size;
+            switch(p_where) {
+                case WhereAt::MENU:
+                    size = v_menuItems.size();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displayMenuItems();
+                    break;
+                case WhereAt::WIFI:
+                    size = wifiMenu.GetSize();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displayWifi();
+                    break;
+                case WhereAt::BLUETOOTH:
+                    size = bluetoothMenu.GetSize();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displayBluetooth();
+                    break;
+                case WhereAt::SUB:
+                    size = subMenu.GetSize();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displaySub();
+                    break;
+                case WhereAt::BADUSB:
+                    size = badusbMenu.GetSize();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displayBad();
+                    break;
+                case WhereAt::GAMES:
+                    size = gamesMenu.GetSize();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displayGames();
+                    break;
+                case WhereAt::SETTINGS:
+                    size = settingsMenu.GetSize();
+                    if (i_currentSelection < size - 1) {
+                        i_currentSelection++;
+                    } else {
+                        i_currentSelection = 0;
+                    }
+                    displaySettings();
+                    break;
+                default:
+                    break;
+            }
+            Serial.println("DownPressed");
+        }
+        if (btn_left.isReleased()) {
+            displayMenuItems();
+            Serial.println("LeftPressed");
+        }
+        if (btn_right.isReleased()) {
+            displayMenuItems();
+            Serial.println("RightPressed");
+        }
+        if (btn_ok.isReleased()) {
+            if (v_menuItems[i_currentSelection].GetName() == "WIFI") {
                 i_currentSelection = 0;
+                p_where = WhereAt::WIFI;
+                displayWifi();
             }
-            displayMenuItems();
-        }
-        if (command == "A") {
-
-        }
-        if (command == "D") {
-
-        }
-        if (command == "E") {
-            if (p_where == WhereAt::MENU) {
-                switch (i_currentSelection) {
-                    case 0:
-                        p_where = WhereAt::WIFI;
-                        i_currentSelection = 0;
-                        displayWifi();
-                        break;
-                    case 1:
-                        p_where = WhereAt::BLUETOOTH;
-                        i_currentSelection = 0;
-                        displayBluetooth();
-                        break;
-                    case 2:
-                        p_where = WhereAt::SUB;
-                        i_currentSelection = 0;
-                        displaySub();
-                        break;
-                    case 3:
-                        p_where = WhereAt::BADUSB;
-                        i_currentSelection = 0;
-                        displayBad();
-                        break;
-                    case 4:
-                        p_where = WhereAt::GAMES;
-                        i_currentSelection = 0;
-                        displayGames();
-                        break;
-                    case 5:
-                        p_where = WhereAt::SETTINGS;
-                        i_currentSelection = 0;
-                        displaySettings();
-                        break;
-                    case 6:
-                        ESP.restart();
-                        break;
-                    default:
-                        break;
-                }
+            if (v_menuItems[i_currentSelection].GetName() == "BLUETOOTH") {
+                i_currentSelection = 0;
+                p_where = WhereAt::BLUETOOTH;
+                displayBluetooth();
             }
-            if (p_where == WhereAt::BLUETOOTH) {
-                switch(i_currentSelection) {
-                    case 0:
-                        i_currentMode = 0;
-                        jamBLE();
-                        break;
-                    case 1:
-                        i_currentMode = 1;
-                        jamBluetooth();
-                        break;
-                    case 2:
-                        i_currentMode = 2;
-                        jamAll();
-                        break;
-                    default:
-                        break;
-                }
+            if (v_menuItems[i_currentSelection].GetName() == "SUB 1GHZ") {
+                i_currentSelection = 0;
+                p_where = WhereAt::SUB;
+                displaySub();
             }
+            if (v_menuItems[i_currentSelection].GetName() == "BADUSB") {
+                i_currentSelection = 0;
+                p_where = WhereAt::BADUSB;
+                displayBad();
+            }
+            if (v_menuItems[i_currentSelection].GetName() == "GAMES") {
+                i_currentSelection = 0;
+                p_where = WhereAt::GAMES;
+                displayGames();
+            }
+            if (v_menuItems[i_currentSelection].GetName() == "SETTINGS") {
+                i_currentSelection = 0;
+                p_where = WhereAt::SETTINGS;
+                displaySettings();
+            }
+            if (v_menuItems[i_currentSelection].GetName() == "REBOOT") {
+                ESP.restart();
+            }
+            Serial.println("OkPressed");
         }
-        if (command == "H") {
+        if (btn_home.isReleased()) {
             i_currentSelection = 0;
-            i_currentMode = 10;
             p_where = WhereAt::MENU;
             displayMenuItems();
+            Serial.println("HomePressed");
         }
-    }
-
-    // WAIT BLE BT JAMMING
-    if (p_where == WhereAt::BLUETOOTH) {
-        switch (i_currentMode)
-        {
-        case 0: 
-            jamBLE();
-            break;
-        case 1:
-            jamBluetooth();
-            break;
-        case 2:
-            jamAll();
-            break;
-        default:
-            break;
-        }
-    }
-
-    jamBluetooth();
 }
+
+/*
+ **********
+ * SPLASH *
+ **********
+*/
 
 void splashScreen() {
     display.clearDisplay();
@@ -294,6 +405,12 @@ void splashScreen() {
     delay(1000);
     
 }
+
+/*
+ ***********
+ * DISPLAY *
+ ***********
+*/
 
 void displayMenuItems() {
     // CLEAR
@@ -468,8 +585,14 @@ void displaySettings() {
     display.display();
 }
 
-void configureRadio(RF24 &radio, int channel, SPIClass &spi) {
-    if (radio.begin()) {
+/*
+ *************
+ * BLUETOOTH *
+ *************
+*/
+
+void configureRadio(RF24 &radio, int channel, SPIClass *spi) {
+    if (radio.begin(spi)) {
         radio.setAutoAck(false);
         radio.stopListening();
         radio.setRetries(0, 0);
@@ -481,28 +604,20 @@ void configureRadio(RF24 &radio, int channel, SPIClass &spi) {
 }
 
 void jamBLE() {
-    display.clearDisplay();
-    displayHud(i_batteryPercent, "JAM BLE", b_isCharging);
-    int randomIndex = random(0, sizeof(i_ble_channels) / sizeof(i_ble_channels[0]));
-    int channel = i_ble_channels[randomIndex];
+    int randomIndex = random(0, sizeof(ble_channels) / sizeof(ble_channels[0]));
+    int channel = ble_channels[randomIndex];
     radioVSPI.setChannel(channel);
-    display.display();
-    Serial.println("JAMMING BLE");
 }
 
 void jamBluetooth() {
-    display.clearDisplay();
-    displayHud(i_batteryPercent, "JAM BT", b_isCharging);
-    int randomIndex = random(0, sizeof(i_bluetoothChannels) / sizeof(i_bluetoothChannels[0]));
-    int channel = i_bluetoothChannels[randomIndex];
+    int randomIndex = random(0, sizeof(bluetooth_channels) / sizeof(bluetooth_channels[0]));
+    int channel = bluetooth_channels[randomIndex];
     radioVSPI.setChannel(channel);
-    display.display();
-    Serial.println("JAMMING BT");
 }
 
 void jamAll() {
     if (random(0, 2)) {
-        jamBluetooth();
+        jamBluetooth();        
     } else {
         jamBLE();
     }
