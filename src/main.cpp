@@ -11,9 +11,11 @@
 #include <vector>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
-#include <ezButton.h>
 #include <images.h>
 #include <menuItem.h>
+#include <RF24.h>
+#include <esp_bt.h>
+#include <esp_wifi.h>
 
 /*
  **********
@@ -38,17 +40,6 @@ bool b_isConnectedToBT   = true;
 bool b_isCharging        = true;
 int  i_batteryPercent    = 100;
 int  i_currentSelection  = 0;
-
-/*
- ***********
- * BUTTONS *
- ***********
-*/
-
-ezButton btn_up(32);
-ezButton btn_down(33);
-ezButton btn_ok(27);
-ezButton btn_back(14);
 
 /*
  *********
@@ -85,6 +76,11 @@ void displayBad();
 void displayGames();
 void displaySettings();
 
+void configureRadio(RF24 &radio, int channel, SPIClass &spi);
+void jamBLE();
+void jamBluetooth();
+void jamAll();
+
 /*
  ************
  * MENUITEM *
@@ -100,6 +96,19 @@ MenuItem settingsMenu("SETTINGS");
 MenuItem shutdownMenu("REBOOT");
 
 /*
+ ********
+ * RF24 *
+ ********
+*/
+
+constexpr int SPI_SPEED = 16000000;
+SPIClass spiVSPI;
+RF24 radioVSPI(16, 5, SPI_SPEED);
+int i_bluetoothChannels[] = {32, 34, 46, 48, 50, 52, 0, 1, 2, 4, 6, 8, 22, 24, 26, 28, 30, 74, 76, 78, 80};
+int i_ble_channels[] = {2, 26, 80};
+int i_currentMode = 0;
+
+/*
  *********
  * START *
  *********
@@ -113,18 +122,15 @@ void setup() {
         for(;;);
     }
 
-    btn_up.setDebounceTime(DEBOUNCE_TIME);
-    btn_down.setDebounceTime(DEBOUNCE_TIME);
-    btn_ok.setDebounceTime(DEBOUNCE_TIME);
-    btn_back.setDebounceTime(DEBOUNCE_TIME);
-
     p_where = WhereAt::MENU;
 
     v_menuItems.push_back(wifiMenu);
     wifiMenu.Add("WTEST");
 
     v_menuItems.push_back(bluetoothMenu);
-    bluetoothMenu.Add("BTEST");
+    bluetoothMenu.Add("JAM BLE");
+    bluetoothMenu.Add("JAM BT");
+    bluetoothMenu.Add("TRY JAM ALL");
 
     v_menuItems.push_back(subMenu);
     subMenu.Add("STEST");
@@ -142,6 +148,20 @@ void setup() {
 
     splashScreen();
     displayMenuItems();
+
+    esp_bt_controller_deinit();
+    esp_wifi_stop();
+    esp_wifi_deinit();
+    esp_wifi_disconnect();
+
+    spiVSPI.begin(18, 19, 23, 5);
+    configureRadio(radioVSPI, i_ble_channels[0], spiVSPI);
+
+    if (!radioVSPI.begin()) {
+    Serial.println("Radio hardware is not responding!");
+    while (1);
+    }
+    Serial.println("nRF24L01 module initialized successfully.");
 }
 
 /*
@@ -151,73 +171,116 @@ void setup() {
 */
 
 void loop() {
-    btn_up.loop();
-    btn_down.loop();
-    btn_ok.loop();
-    btn_back.loop();
+    if (Serial.available()) {
+        String command = Serial.readStringUntil('\n');
+        if (command == "W") {
+            if (i_currentSelection > 0) {
+                i_currentSelection -= 1;
+            } else {
+                i_currentSelection = v_menuItems.size() - 1;
+            }
+            displayMenuItems();
+        }
+        if (command == "S") {
+            if (i_currentSelection < v_menuItems.size() - 1) {
+                i_currentSelection += 1;
+            } else {
+                i_currentSelection = 0;
+            }
+            displayMenuItems();
+        }
+        if (command == "A") {
 
-    if (btn_up.isReleased()) {
-        if (i_currentSelection > 0) {
-            i_currentSelection -= 1;
-        } else {
-            i_currentSelection = v_menuItems.size() - 1;
         }
-        displayMenuItems();
-    }
-    if (btn_down.isReleased()) {
-        if (i_currentSelection < v_menuItems.size() - 1) {
-            i_currentSelection += 1;
-        } else {
-            i_currentSelection = 0;
+        if (command == "D") {
+
         }
-        displayMenuItems();
-    }
-    if (btn_back.isReleased()) {
-        i_currentSelection = 0;
-        p_where = WhereAt::MENU;
-        displayMenuItems();
-    }
-    if (btn_ok.isReleased()) {
-        if (p_where == WhereAt::MENU) {
-            switch (i_currentSelection) {
-                case 0:
-                    p_where = WhereAt::WIFI;
-                    i_currentSelection = 0;
-                    displayWifi();
-                    break;
-                case 1:
-                    p_where = WhereAt::BLUETOOTH;
-                    i_currentSelection = 0;
-                    displayBluetooth();
-                    break;
-                case 2:
-                    p_where = WhereAt::SUB;
-                    i_currentSelection = 0;
-                    displaySub();
-                    break;
-                case 3:
-                    p_where = WhereAt::BADUSB;
-                    i_currentSelection = 0;
-                    displayBad();
-                    break;
-                case 4:
-                    p_where = WhereAt::GAMES;
-                    i_currentSelection = 0;
-                    displayGames();
-                    break;
-                case 5:
-                    p_where = WhereAt::SETTINGS;
-                    i_currentSelection = 0;
-                    displaySettings();
-                    break;
-                case 6:
-                    ESP.restart();
-                    break;
-                default:
-                    break;
+        if (command == "E") {
+            if (p_where == WhereAt::MENU) {
+                switch (i_currentSelection) {
+                    case 0:
+                        p_where = WhereAt::WIFI;
+                        i_currentSelection = 0;
+                        displayWifi();
+                        break;
+                    case 1:
+                        p_where = WhereAt::BLUETOOTH;
+                        i_currentSelection = 0;
+                        displayBluetooth();
+                        break;
+                    case 2:
+                        p_where = WhereAt::SUB;
+                        i_currentSelection = 0;
+                        displaySub();
+                        break;
+                    case 3:
+                        p_where = WhereAt::BADUSB;
+                        i_currentSelection = 0;
+                        displayBad();
+                        break;
+                    case 4:
+                        p_where = WhereAt::GAMES;
+                        i_currentSelection = 0;
+                        displayGames();
+                        break;
+                    case 5:
+                        p_where = WhereAt::SETTINGS;
+                        i_currentSelection = 0;
+                        displaySettings();
+                        break;
+                    case 6:
+                        ESP.restart();
+                        break;
+                    default:
+                        break;
+                }
+            }
+            if (p_where == WhereAt::BLUETOOTH) {
+                switch(i_currentSelection) {
+                    case 0:
+                        i_currentMode = 0;
+                        jamBLE();
+                        break;
+                    case 1:
+                        i_currentMode = 1;
+                        jamBluetooth();
+                        break;
+                    case 2:
+                        i_currentMode = 2;
+                        jamAll();
+                        break;
+                    default:
+                        break;
+                }
             }
         }
+        if (command == "H") {
+            i_currentSelection = 0;
+            i_currentMode = 10;
+            p_where = WhereAt::MENU;
+            displayMenuItems();
+        }
     }
+
+    // WAIT BLE BT JAMMING
+    if (p_where == WhereAt::BLUETOOTH) {
+        switch (i_currentMode)
+        {
+        case 0: 
+            jamBLE();
+            break;
+        case 1:
+            jamBluetooth();
+            break;
+        case 2:
+            jamAll();
+            break;
+        default:
+            break;
+        }
+    }
+
+    jamBluetooth();
 }
 
 void splashScreen() {
@@ -256,6 +319,7 @@ void displayMenuItems() {
         if (v_menuItems[i].GetName() == "SETTINGS")  { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_settings, 11, 11, WHITE); }
         if (v_menuItems[i].GetName() == "REBOOT")    { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_turnoff, 11, 11, WHITE); }
         if (v_menuItems[i].GetName() == "GAMES")     { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_games, 11, 11, WHITE);}
+        if (v_menuItems[i].GetName() == "SUB 1GHZ")  { display.drawBitmap(114, 20 * (j + 1), IMAGES::icon_sub, 11, 11, WHITE);}
         j++;
     }
     // DISPLAY
@@ -402,4 +466,44 @@ void displaySettings() {
         j++;
     }
     display.display();
+}
+
+void configureRadio(RF24 &radio, int channel, SPIClass &spi) {
+    if (radio.begin()) {
+        radio.setAutoAck(false);
+        radio.stopListening();
+        radio.setRetries(0, 0);
+        radio.setPALevel(RF24_PA_MAX, true);
+        radio.setDataRate(RF24_2MBPS);
+        radio.setCRCLength(RF24_CRC_DISABLED);
+        radio.startConstCarrier(RF24_PA_HIGH, channel);
+    }
+}
+
+void jamBLE() {
+    display.clearDisplay();
+    displayHud(i_batteryPercent, "JAM BLE", b_isCharging);
+    int randomIndex = random(0, sizeof(i_ble_channels) / sizeof(i_ble_channels[0]));
+    int channel = i_ble_channels[randomIndex];
+    radioVSPI.setChannel(channel);
+    display.display();
+    Serial.println("JAMMING BLE");
+}
+
+void jamBluetooth() {
+    display.clearDisplay();
+    displayHud(i_batteryPercent, "JAM BT", b_isCharging);
+    int randomIndex = random(0, sizeof(i_bluetoothChannels) / sizeof(i_bluetoothChannels[0]));
+    int channel = i_bluetoothChannels[randomIndex];
+    radioVSPI.setChannel(channel);
+    display.display();
+    Serial.println("JAMMING BT");
+}
+
+void jamAll() {
+    if (random(0, 2)) {
+        jamBluetooth();
+    } else {
+        jamBLE();
+    }
 }

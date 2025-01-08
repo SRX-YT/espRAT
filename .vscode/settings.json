@@ -9,7 +9,8 @@
         "nobt",
         "nowifi",
         "SETTINGSTEST",
-        "SWITCHCAPVCC"
+        "SWITCHCAPVCC",
+        "VSPI"
     ],
     "files.associations": {
         "vector": "cpp",
