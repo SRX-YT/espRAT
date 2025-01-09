@@ -7,6 +7,8 @@
 #include <Arduino.h>
 #include <U8g2lib.h>
 #include <ezButton.h>
+#include <Adafruit_NeoPixel.h>
+
 
 #ifdef U8X8_HAVE_HW_I2C
 #include <Wire.h>
@@ -28,6 +30,12 @@
 #define CE_PIN 4
 #define CSN_PIN 5
 RF24 radio(CE_PIN, CSN_PIN);
+bool b_isScanner = false;
+bool b_isAnalyzer = false;
+bool b_isJammer = false;
+bool b_isBleJammer = false;
+bool b_isSpoofer = false;
+bool b_isApplespam = false;
 
 /*
  ***********
@@ -35,37 +43,120 @@ RF24 radio(CE_PIN, CSN_PIN);
  ***********
 */
 
-#include "MENU/WIFI.h"
-#include "MENU/BLUETOOTH.h"
-#include "MENU/BADUSB.h"
-#include "MENU/GAMES.h"
-#include "MENU/SETTINGS.h"
-#include "MENU/SUB.h"
 #include "icon.h"
-WIFI wifi;
-BLUETOOTH bluetooth;
-BADUSB badusb;
-GAMES games;
-SETTINGS settings;
-SUB sub;
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE);
-const unsigned char* c_bitmap_icons[6] = {
-    ICON::bitmap_icon_wifi,
-    ICON::bitmap_icon_bt,
-    ICON::bitmap_icon_sub,
-    ICON::bitmap_icon_evilusb,
-    ICON::bitmap_icon_games,
-    ICON::bitmap_icon_settings
-};
-const int NUM_ITEMS = 6;
+
 const int MAX_ITEM_LENGTH = 20;
-char menu_items [NUM_ITEMS] [MAX_ITEM_LENGTH] = {
+
+const int MENU_MAX_ITEMS = 6;
+char c_menu_items [6] [MAX_ITEM_LENGTH] = {
     { "WIFI" },
     { "BLUETOOTH" },
     { "SUB-1GHZ" },
     { "BAD USB" },
     { "GAMES" },
     { "SETINGS" },
+};
+const unsigned char* c_menu_icons[6] = {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
+};
+
+const int WIFI_MAX_ITEMS = 3;
+char c_wifi_items [3] [MAX_ITEM_LENGTH] = {
+    { "WTEST" },
+    { "WTEST" },
+    { "WTEST" }
+};
+const unsigned char* c_wifi_icons[6] {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
+};
+
+const int BLUETOOTH_MAX_ITEMS = 6;
+char c_bluetooth_items [6] [MAX_ITEM_LENGTH] = {
+    { "ANALYZER" },
+    { "SCANNER" },
+    { "SPOOFER" },
+    { "JAMMER" },
+    { "BLE JAMMER" },
+    { "APPLE SPAM" }
+};
+const unsigned char* c_bluetooth_icons[6] {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
+};
+
+const int SUB_MAX_ITEMS = 3;
+char c_sub_items [3] [MAX_ITEM_LENGTH] = {
+    { "STEST" },
+    { "STEST" },
+    { "STEST" }
+};
+const unsigned char* c_sub_icons[6] {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
+};
+
+const int BADUSB_MAX_ITEMS = 3;
+char c_badusb_items [3] [MAX_ITEM_LENGTH] = {
+    { "BTEST" },
+    { "BTEST" },
+    { "BTEST" }
+};
+const unsigned char* c_badusb_icons[6] {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
+};
+
+const int GAMES_MAX_ITEMS = 3;
+char c_games_items [3] [MAX_ITEM_LENGTH] = {
+    { "GTEST" },
+    { "GTEST" },
+    { "GTEST" }
+};
+const unsigned char* c_games_icons[6] {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
+};
+
+const int SETTINGS_MAX_ITEMS = 3;
+char c_settings_items [3] [MAX_ITEM_LENGTH] = {
+    { "SETEST" },
+    { "SETEST" },
+    { "SETEST" }
+};
+const unsigned char* c_settings_icons[6] {
+    ICON::MENU::menu_icon_wifi,
+    ICON::MENU::menu_icon_bt,
+    ICON::MENU::menu_icon_sub,
+    ICON::MENU::menu_icon_evilusb,
+    ICON::MENU::menu_icon_games,
+    ICON::MENU::menu_icon_settings
 };
 
 /*
@@ -92,6 +183,18 @@ int i_item_sel_previous;
 int i_item_sel_next;
 int i_current_screen = 0;
 int i_current_selected = 0;
+int i_prev_item_selected;
+
+/*
+ *******
+ * LED *
+ *******
+*/
+
+#define LED_PIN     26
+#define NUM_LEDS    1
+#define BRIGHTNESS  40
+Adafruit_NeoPixel pixels(NUM_LEDS, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 /*
  ********
@@ -100,7 +203,32 @@ int i_current_selected = 0;
 */
 
 void configureRF(RF24 &radio);
-void setup();
+
+void buttonsLoop();
+void checkButtonOk();
+void checkButtonHome();
+void checkButtonsUpDown();
+
+void updateDisplay();
+
+template <size_t rows, size_t cols>
+int getSizeC(char(&chars)[rows][cols]);
+
+void menuLoop();
+void wifiLoop();
+void bluetoothLoop();
+void subLoop();
+void badusbLoop();
+void gamesLoop();
+void settingsLoop();
+
+/*
+*********
+* OTHER *
+*********
+*/
+
+bool b_inApp = false;
 
 /*
  *********
@@ -109,6 +237,13 @@ void setup();
 */
 
 void setup() {
+    Serial.begin(115200);
+    
+    pixels.begin();
+    pixels.setBrightness(BRIGHTNESS);
+    pixels.setPixelColor(0, pixels.Color(150, 0, 0));
+    pixels.show();
+
     btn_up.setDebounceTime(DEBOUNCE_TIME);
     btn_down.setDebounceTime(DEBOUNCE_TIME);
     btn_left.setDebounceTime(DEBOUNCE_TIME);
@@ -133,6 +268,9 @@ void setup() {
     delay(1000);
 
     display.clearBuffer();
+
+    pixels.clear();
+    pixels.show();
 }
 
 /*
@@ -142,148 +280,95 @@ void setup() {
 */
 
 void loop() {
+    buttonsLoop();
+
+    if (!b_inApp) {
+        display.clearBuffer();
+
+        checkButtonOk();
+        checkButtonsUpDown();
+        updateDisplay();
+
+        display.sendBuffer();
+    }
+
+    checkButtonHome();
+}
+
+/*
+ ********
+ * RF24 *
+ ********
+*/
+
+void configureRF(RF24 &radio) {
+    radio.begin();
+    radio.setAutoAck(false);
+    radio.stopListening();
+    radio.setRetries(0, 0);
+    radio.setPALevel(RF24_PA_MAX, true);
+    radio.setDataRate(RF24_2MBPS);
+    radio.setCRCLength(RF24_CRC_DISABLED);
+}
+
+/*
+***********
+* BUTTONS *
+***********
+*/
+
+void buttonsLoop() {
     btn_up.loop();
     btn_down.loop();
     btn_left.loop();
     btn_right.loop();
     btn_ok.loop();
     btn_home.loop();
+}
 
-    if (i_current_screen == 0) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = NUM_ITEMS - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= NUM_ITEMS) {
-                i_item_selected = 0;
-            }
-        }
-    }
-    if (i_current_screen == 1) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = wifi.getSize() - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= wifi.getSize()) {
-                i_item_selected = 0;
-            }
-        }
-    }
-    if (i_current_screen == 2) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = bluetooth.getSize() - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= bluetooth.getSize()) {
-                i_item_selected = 0;
-            }
-        }
-    }
-    if (i_current_screen == 3) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = sub.getSize() - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= sub.getSize()) {
-                i_item_selected = 0;
-            }
-        }
-    }
-    if (i_current_screen == 4) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = badusb.getSize() - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= badusb.getSize()) {
-                i_item_selected = 0;
-            }
-        }
-    }
-    if (i_current_screen == 5) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = games.getSize() - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= games.getSize()) {
-                i_item_selected = 0;
-            }
-        }
-    }
-    if (i_current_screen == 6) {
-        if (btn_up.isReleased()) {
-            i_item_selected -= 1;
-            if (i_item_selected < 0) {
-                i_item_selected = settings.getSize() - 1;
-            }
-        }
-        if (btn_down.isReleased()) {
-            i_item_selected += 1;
-            if (i_item_selected >= settings.getSize()) {
-                i_item_selected = 0;
-            }
-        }
-    }
-
+/*
+******************
+* DISPLAY THINGS *
+******************
+*/
+void checkButtonOk() {
     if (btn_ok.isReleased()) {
+        i_prev_item_selected = i_item_selected;
         switch (i_current_screen) {
             // MENU
             case 0: 
                 if (i_item_selected == 0) {
-                    wifi.wifiSetup();
+                    // wifiSetup();
                     i_current_screen = i_item_selected + 1;
                     i_current_selected = i_item_selected + 1;
                     break;
                 }
                 if (i_item_selected == 1) {
-                    bluetooth.bluetoothSetup();
+                    // bluetoothSetup();
                     i_current_screen = i_item_selected + 1;
                     i_current_selected = i_item_selected + 1;
                     break;
                 }
                 if (i_item_selected == 2) {
-                    sub.subSetup();
+                    // subSetup();
                     i_current_screen = i_item_selected + 1;
                     i_current_selected = i_item_selected + 1;
                     break;
                 }
                 if (i_item_selected == 3) {
-                    badusb.badusbSetup();
+                    // badusbSetup();
                     i_current_screen = i_item_selected + 1;
                     i_current_selected = i_item_selected + 1;
                     break;
                 }
                 if (i_item_selected == 4) {
-                    games.gamesSetup();
+                    // gamesSetup();
                     i_current_screen = i_item_selected + 1;
                     i_current_selected = i_item_selected + 1;
                     break;
                 }
                 if (i_item_selected == 5) {
-                    settings.settingsSetup();
+                    // settingsSetup();
                     i_current_screen = i_item_selected + 1;
                     i_current_selected = i_item_selected + 1;
                     break;
@@ -311,89 +396,332 @@ void loop() {
                 break;
         }
     }
+}
 
-    // UPDATE DISPLAY
-    switch (i_current_selected) {
-        case 1:
-            wifi.wifiLoop();
-            break;
-        case 2:
-            bluetooth.bluetoothLoop();
-            break;
-        case 3:
-            sub.subLoop();
-            break;
-        case 4:
-            badusb.badusbLoop();
-            break;
-        case 5:
-            games.gamesLoop();
-            break;
-        case 6:
-            settings.settingsLoop();
-            break;
-        default:
-            break;
-    }
-
+void checkButtonHome() {
     if (btn_home.isReleased()) {
         if (i_current_screen == 0) { return; }
         i_current_selected = 0;
         i_current_screen = 0;
-        i_item_selected = 0;
+        i_item_selected = i_prev_item_selected;
+        b_inApp = false;
     }
+}
 
+void checkButtonsUpDown() {
+    if (i_current_screen == 0) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = MENU_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= MENU_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+    if (i_current_screen == 1) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = WIFI_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= WIFI_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+    if (i_current_screen == 2) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = BLUETOOTH_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= BLUETOOTH_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+    if (i_current_screen == 3) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = SUB_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= SUB_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+    if (i_current_screen == 4) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = BADUSB_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= BADUSB_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+    if (i_current_screen == 5) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = GAMES_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= GAMES_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+    if (i_current_screen == 6) {
+        if (btn_up.isReleased()) {
+            i_item_selected -= 1;
+            if (i_item_selected < 0) {
+                i_item_selected = SETTINGS_MAX_ITEMS - 1;
+            }
+        }
+        if (btn_down.isReleased()) {
+            i_item_selected += 1;
+            if (i_item_selected >= SETTINGS_MAX_ITEMS) {
+                i_item_selected = 0;
+            }
+        }
+    }
+}
+
+void updateDisplay() {
+    switch (i_current_selected) {
+        case 0:
+            menuLoop();
+            break;
+        case 1:
+            wifiLoop();
+            break;
+        case 2:
+            bluetoothLoop();
+            break;
+        case 3:
+            subLoop();
+            break;
+        case 4:
+            badusbLoop();
+            break;
+        case 5:
+            gamesLoop();
+            break;
+        case 6:
+            settingsLoop();
+            break;
+        default:
+            break;
+    }
+}
+
+void menuLoop() {
     // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
     i_item_sel_previous = i_item_selected - 1;
-    if (i_item_sel_previous < 0) { i_item_sel_previous = NUM_ITEMS - 1; }
+    if (i_item_sel_previous < 0) { i_item_sel_previous = MENU_MAX_ITEMS - 1; }
     i_item_sel_next = i_item_selected + 1;
-    if (i_item_sel_next >= NUM_ITEMS) { i_item_sel_next = 0; }
+    if (i_item_sel_next >= MENU_MAX_ITEMS) { i_item_sel_next = 0; }
 
-    display.clearBuffer();
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_menu_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_menu_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_menu_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_menu_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_menu_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_menu_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / MENU_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
+}
+void wifiLoop() {
+    // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
+    i_item_sel_previous = i_item_selected - 1;
+    if (i_item_sel_previous < 0) { i_item_sel_previous = WIFI_MAX_ITEMS - 1; }
+    i_item_sel_next = i_item_selected + 1;
+    if (i_item_sel_next >= WIFI_MAX_ITEMS) { i_item_sel_next = 0; }
 
-    // DRAW DISPLAY
-    if (i_current_screen == 0) {
-        // UI OUTLINE
-        display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_wifi_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_wifi_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_wifi_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_wifi_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_wifi_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_wifi_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / WIFI_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
+}
+void bluetoothLoop() {
+    // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
+    i_item_sel_previous = i_item_selected - 1;
+    if (i_item_sel_previous < 0) { i_item_sel_previous = BLUETOOTH_MAX_ITEMS - 1; }
+    i_item_sel_next = i_item_selected + 1;
+    if (i_item_sel_next >= BLUETOOTH_MAX_ITEMS) { i_item_sel_next = 0; }
 
-        // PREV
-        display.setFont(u8g_font_7x14);
-        display.drawStr(25, 15, menu_items[i_item_sel_previous]);
-        display.drawXBMP(4, 2, 16, 16, c_bitmap_icons[i_item_sel_previous]);
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_bluetooth_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_bluetooth_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_bluetooth_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_bluetooth_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_bluetooth_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_bluetooth_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / BLUETOOTH_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
+}
+void subLoop() {
+    // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
+    i_item_sel_previous = i_item_selected - 1;
+    if (i_item_sel_previous < 0) { i_item_sel_previous = SUB_MAX_ITEMS - 1; }
+    i_item_sel_next = i_item_selected + 1;
+    if (i_item_sel_next >= SUB_MAX_ITEMS) { i_item_sel_next = 0; }
 
-        // CURRENT
-        display.setFont(u8g_font_7x14B);
-        display.drawStr(25, 15 + 20 + 2, menu_items[i_item_selected]);
-        display.drawXBMP(4, 24, 16, 16, c_bitmap_icons[i_item_selected]);
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_sub_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_sub_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_sub_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_sub_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_sub_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_sub_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / SUB_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
+}
+void badusbLoop() {
+    // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
+    i_item_sel_previous = i_item_selected - 1;
+    if (i_item_sel_previous < 0) { i_item_sel_previous = BADUSB_MAX_ITEMS - 1; }
+    i_item_sel_next = i_item_selected + 1;
+    if (i_item_sel_next >= BADUSB_MAX_ITEMS) { i_item_sel_next = 0; }
 
-        // NEXT
-        display.setFont(u8g_font_7x14);
-        display.drawStr(25, 15 + 20 + 20 + 2 + 2, menu_items[i_item_sel_next]);
-        display.drawXBMP(4, 46, 16, 16, c_bitmap_icons[i_item_sel_next]);
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_badusb_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_badusb_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_badusb_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_badusb_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_badusb_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_badusb_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / BADUSB_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
+}
+void gamesLoop() {
+    // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
+    i_item_sel_previous = i_item_selected - 1;
+    if (i_item_sel_previous < 0) { i_item_sel_previous = GAMES_MAX_ITEMS - 1; }
+    i_item_sel_next = i_item_selected + 1;
+    if (i_item_sel_next >= GAMES_MAX_ITEMS) { i_item_sel_next = 0; }
 
-        // UI SCROLLBAR
-        display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_games_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_games_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_games_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_games_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_games_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_games_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / GAMES_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
+}
+void settingsLoop() {
+    // SHOW PREV AND NEXT ITEMS IN MENU CAROUSEL
+    i_item_sel_previous = i_item_selected - 1;
+    if (i_item_sel_previous < 0) { i_item_sel_previous = SETTINGS_MAX_ITEMS - 1; }
+    i_item_sel_next = i_item_selected + 1;
+    if (i_item_sel_next >= SETTINGS_MAX_ITEMS) { i_item_sel_next = 0; }
 
-        // UI SCROLLBAR BOX
-        int temp = 64 / NUM_ITEMS;
-        display.drawBox(125, temp * i_item_selected, 3, temp);
-    }
-
-    display.sendBuffer();
+    display.drawXBMP(0, 22, 128, 21, UI::bitmap_item_sel_outline);
+    // PREV
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15, c_settings_items[i_item_sel_previous]);
+    display.drawXBMP(4, 2, 16, 16, c_settings_icons[i_item_sel_previous]);
+    // CURRENT
+    display.setFont(u8g_font_7x14B);
+    display.drawStr(25, 15 + 20 + 2, c_settings_items[i_item_selected]);
+    display.drawXBMP(4, 24, 16, 16, c_settings_icons[i_item_selected]);
+    // NEXT
+    display.setFont(u8g_font_7x14);
+    display.drawStr(25, 15 + 20 + 20 + 2 + 2, c_settings_items[i_item_sel_next]);
+    display.drawXBMP(4, 46, 16, 16, c_settings_icons[i_item_sel_next]);
+    // UI SCROLLBAR
+    display.drawXBMP(128 - 8, 0, 8, 64, UI::bitmap_scrollbar_background);
+    // UI SCROLLBAR BOX
+    int temp = 64 / SETTINGS_MAX_ITEMS;
+    display.drawBox(125, temp * i_item_selected, 3, temp);
 }
 
 /*
- ********
- * RF24 *
- ********
+*********
+* OTHER *
+*********
 */
-
-void configureRF(RF24 &radio) {
-    radio.begin();
-    radio.setAutoAck(false);
-    radio.stopListening();
-    radio.setRetries(0, 0);
-    radio.setPALevel(RF24_PA_MAX, true);
-    radio.setDataRate(RF24_2MBPS);
-    radio.setCRCLength(RF24_CRC_DISABLED);
-}
