@@ -4,15 +4,7 @@
  ***********
 */
 
-#include <Arduino.h>
-#include <U8g2lib.h>
-#include <ezButton.h>
-#include <Adafruit_NeoPixel.h>
-
-
-#ifdef U8X8_HAVE_HW_I2C
-#include <Wire.h>
-#endif
+#include "include.h"
 
 /*
  *************
@@ -20,7 +12,6 @@
  *************
 */
 
-#include <RF24.h>
 #include "BT/scanner.h"
 #include "BT/analyzer.h"
 #include "BT/jammer.h"
@@ -43,7 +34,6 @@ bool b_isApplespam = false;
  ***********
 */
 
-#include "icon.h"
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C display(U8G2_R0, U8X8_PIN_NONE);
 
 const int MAX_ITEM_LENGTH = 20;
@@ -55,7 +45,7 @@ char c_menu_items [6] [MAX_ITEM_LENGTH] = {
     { "SUB-1GHZ" },
     { "BAD USB" },
     { "GAMES" },
-    { "SETINGS" },
+    { "SETTINGS" },
 };
 const unsigned char* c_menu_icons[6] = {
     ICON::MENU::menu_icon_wifi,
@@ -91,12 +81,12 @@ char c_bluetooth_items [6] [MAX_ITEM_LENGTH] = {
     { "APPLE SPAM" }
 };
 const unsigned char* c_bluetooth_icons[6] {
-    ICON::MENU::menu_icon_wifi,
-    ICON::MENU::menu_icon_bt,
-    ICON::MENU::menu_icon_sub,
-    ICON::MENU::menu_icon_evilusb,
-    ICON::MENU::menu_icon_games,
-    ICON::MENU::menu_icon_settings
+    ICON::BT::bt_icon_analyzer,
+    ICON::BT::bt_icon_scanner,
+    ICON::BT::bt_icon_spoofer,
+    ICON::BT::bt_icon_jammer,
+    ICON::BT::bt_icon_blejammer,
+    ICON::BT::bt_icon_applespam
 };
 
 const int SUB_MAX_ITEMS = 3;
@@ -211,9 +201,6 @@ void checkButtonsUpDown();
 
 void updateDisplay();
 
-template <size_t rows, size_t cols>
-int getSizeC(char(&chars)[rows][cols]);
-
 void menuLoop();
 void wifiLoop();
 void bluetoothLoop();
@@ -290,6 +277,8 @@ void loop() {
         updateDisplay();
 
         display.sendBuffer();
+    } else { 
+        updateDisplay();
     }
 
     checkButtonHome();
@@ -377,8 +366,18 @@ void checkButtonOk() {
             // WIFI
             case 1:
                 break;
-            // BLUETOOTH
+            // BT
             case 2:
+                if (i_item_selected == 0) {
+                    b_inApp = true;
+                    b_isAnalyzer = true;
+                    analyzerSetup();
+                }
+                if (i_item_selected == 5) {
+                    b_inApp = true;
+                    b_isApplespam = true;
+                    applespamSetup();
+                }
                 break;
             // SUB
             case 3:
@@ -399,12 +398,15 @@ void checkButtonOk() {
 }
 
 void checkButtonHome() {
-    if (btn_home.isReleased()) {
+    if (btn_home.isPressed()) {
         if (i_current_screen == 0) { return; }
         i_current_selected = 0;
         i_current_screen = 0;
         i_item_selected = i_prev_item_selected;
         b_inApp = false;
+
+        b_isApplespam = false;
+        b_isAnalyzer = false;
     }
 }
 
@@ -510,7 +512,8 @@ void checkButtonsUpDown() {
 }
 
 void updateDisplay() {
-    switch (i_current_selected) {
+    if (!b_inApp) {
+        switch (i_current_selected) {
         case 0:
             menuLoop();
             break;
@@ -534,6 +537,15 @@ void updateDisplay() {
             break;
         default:
             break;
+        }
+    }
+    else if (b_inApp) {
+        if (b_isApplespam) {
+            applespamLoop();
+        }
+        if (b_isAnalyzer) {
+            analyzerLoop();
+        }
     }
 }
 
